@@ -1,56 +1,68 @@
-import { useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { Canvas, useFrame } from "@react-three/fiber";
+import React, {Suspense, useRef} from "react";
+import {StyleSheet} from "react-native";
+import {Canvas} from "@react-three/fiber";
+import "react-native-gesture-handler";
+import {GestureDetector, GestureHandlerRootView, Gesture} from "react-native-gesture-handler";
+import Animated from "react-native-reanimated";
 
-function Box(props) {
-  // This reference will give us direct access to the mesh
-  const mesh = useRef();
+import Model from "./components/Model";
 
-  // Set up state for the hovered and active state
-  const [hovered, setHover] = useState(false);
-  const [active, setActive] = useState(false);
-
-  // Rotate mesh every frame, this is outside of React without overhead
-  useFrame(() => {
-    if (mesh && mesh.current) {
-      mesh.current.rotation.x = mesh.current.rotation.y += 0.01;
-    }
-  });
-
-  return (
-    <mesh
-      {...props}
-      ref={mesh}
-      scale={active ? [1.5, 1.5, 1.5] : [1, 1, 1]}
-      onClick={(e) => setActive(!active)}
-      onPointerOver={(e) => setHover(true)}
-      onPointerOut={(e) => setHover(false)}
-    >
-      <boxBufferGeometry attach="geometry" args={[1, 1, 1]} />
-      <meshStandardMaterial
-        attach="material"
-        color={hovered ? "hotpink" : "orange"}
-      />
-    </mesh>
-  );
-}
+const MIN_SCALE = 1.5;
+const DEFAULT_SCALE = 4;
+const MAX_SCALE = 10;
 
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <Canvas>
-        <ambientLight />
-        <pointLight position={[10, 10, 10]} />
-        <Box position={[-1.2, 0, 0]} />
-        <Box position={[1.2, 0, 0]} />
-      </Canvas>
-    </View>
-  );
+    const rotationX = useRef(-25);
+    const rotationY = useRef(0);
+    const scale = useRef(DEFAULT_SCALE);
+
+    const gesture = Gesture.Pan()
+        .runOnJS(true)
+        .onChange((e) => {
+            rotationX.current += e.changeX;
+            rotationY.current += e.changeY;
+        })
+
+    const zoomGesture = Gesture.Pinch()
+        .runOnJS(true)
+        .onUpdate((event) => {
+            const currentZoom = scale.current * event.scale;
+            const inRange = currentZoom > MIN_SCALE && currentZoom < MAX_SCALE;
+
+            if (inRange) {
+                scale.current = scale.current * event.scale;
+            }
+        })
+
+    const composed = Gesture.Simultaneous(gesture, zoomGesture);
+
+    return (
+        <GestureHandlerRootView style={styles.container}>
+            <GestureDetector gesture={composed}>
+                <Animated.View style={{flex: 1}}>
+                    <Canvas
+                        pointerEvents="none"
+                        camera={{fov: 75, near: 0.1, far: 1000, position: [0, (180 * Math.PI) / 180, 10]}}
+                    >
+                        <ambientLight intensity={1} />
+                        <Suspense fallback={null}>
+                            <Model rotationX={rotationX} rotationY={rotationY} scale={scale}></Model>
+                        </Suspense>
+                    </Canvas>
+                </Animated.View>
+            </GestureDetector>
+        </GestureHandlerRootView>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "black",
-  },
+    container: {
+        flex: 1,
+        backgroundColor: "white",
+    },
+    button: {
+        width: 50,
+        height: 50,
+        backgroundColor: "pink",
+    }
 });
